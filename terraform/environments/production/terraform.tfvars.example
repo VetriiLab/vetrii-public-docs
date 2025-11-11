@@ -1,0 +1,21 @@
+# Copy this file to terraform.tfvars and update with your values
+# AWS Configuration
+aws_region  = "us-east-2"
+aws_profile = "Vetrii"
+
+# Project Configuration
+project_name = "vetrii-backend"
+
+# Environment Configuration
+environment = "production"
+
+# S3 Bucket Configuration
+bucket_name = "vetrii-backend-production-bucket"
+
+# Tags
+tags_extra = {
+  Project     = "Vetrii Backend"
+  ManagedBy   = "Terraform"
+  Owner       = "Vetrii"
+  Environment = "production"
+}

@@ -1,0 +1,839 @@
+openapi: 3.0.0
+info:
+  title: Vetrii API
+  description: API documentation for Vetrii application
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: number
+        message:
+          type: string
+        error:
+          type: string
+
+    SendOtpDto:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+
+    VerifyOtpLoginDto:
+      type: object
+      required:
+        - email
+        - otp
+      properties:
+        email:
+          type: string
+          format: email
+        otp:
+          type: string
+
+    PaginationDto:
+      type: object
+      properties:
+        page:
+          type: number
+          minimum: 1
+          default: 1
+        limit:
+          type: number
+          minimum: 1
+          maximum: 100
+          default: 10
+
+    UserDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        isBlacklisted:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    BlacklistUserDto:
+      type: object
+      required:
+        - userId
+        - blacklist
+      properties:
+        userId:
+          type: string
+        blacklist:
+          type: boolean
+
+    UnlockUserDto:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+
+    PromoteToAdminDto:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+
+    CreateWalletDto:
+      type: object
+      required:
+        - address
+        - name
+      properties:
+        address:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    UpdateWalletDto:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    WalletDto:
+      type: object
+      properties:
+        id:
+          type: string
+        address:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        userId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ApplyReferralDto:
+      type: object
+      required:
+        - referralCode
+      properties:
+        referralCode:
+          type: string
+
+    AdminConfigResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        value:
+          type: string
+        description:
+          type: string
+
+    UpdateAdminConfigDto:
+      type: object
+      properties:
+        value:
+          type: string
+
+tags:
+  - name: Authorization
+    description: Authentication and authorization endpoints
+  - name: Users
+    description: User management endpoints
+  - name: wallets
+    description: Wallet management endpoints
+  - name: Referrals
+    description: Referral system endpoints
+  - name: admin
+    description: Admin configuration endpoints
+  - name: debug
+    description: Debug and monitoring endpoints
+
+paths:
+  /:
+    get:
+      tags:
+        - debug
+      summary: Hello World
+      responses:
+        '200':
+          description: Simple greeting message
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Hello World!
+
+  /auth/login:
+    post:
+      tags:
+        - Authorization
+      summary: Send OTP to email (for login or registration)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendOtpDto'
+      responses:
+        '200':
+          description: OTP sent successfully to the email address.
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login-validate:
+    post:
+      tags:
+        - Authorization
+      summary: Verify OTP and login (creates user if doesn't exist)
+      security: []
+      parameters:
+        - name: refCode
+          in: query
+          description: Optional referral code for new users
+          required: false
+          schema:
+            type: string
+            example: ABC12345
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpLoginDto'
+      responses:
+        '200':
+          description: User authenticated successfully and JWT token returned.
+        '400':
+          description: Invalid or expired OTP code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/profile:
+    get:
+      tags:
+        - Authorization
+      summary: Get user profile
+      responses:
+        '200':
+          description: User profile information
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/google:
+    get:
+      tags:
+        - Authorization
+      summary: Google OAuth2 Login
+      description: Inicia o fluxo de autenticação com Google OAuth2
+      security: []
+      responses:
+        '302':
+          description: Redireciona para a página de autenticação do Google
+
+  /auth/google/callback:
+    get:
+      tags:
+        - Authorization
+      summary: Google OAuth2 Callback
+      description: Endpoint de callback para autenticação Google OAuth2
+      security: []
+      responses:
+        '200':
+          description: Autenticação bem-sucedida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          description: Autenticação falhou
+
+  /auth/verify-email:
+    get:
+      tags:
+        - Authorization
+      summary: Verify email address
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Email verified successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Invalid or expired verification token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users:
+    get:
+      tags:
+        - Users
+      summary: List users (Admin only)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Returns paginated list of users
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/details/all:
+    get:
+      tags:
+        - Users
+      summary: Get detailed information for all users (Admin only)
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: number
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Returns detailed information for all users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDetailDto'
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/details:
+    get:
+      tags:
+        - Users
+      summary: Get detailed user information (Admin only)
+      parameters:
+        - name: id
+          in: path
+          description: User ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Returns detailed user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetailDto'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/blacklist:
+    post:
+      tags:
+        - Users
+      summary: Blacklist or unblacklist a user (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlacklistUserDto'
+      responses:
+        '200':
+          description: User blacklist status updated successfully
+        '403':
+          description: Forbidden - Admin access required or trying to blacklist yourself
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/unlock:
+    post:
+      tags:
+        - Users
+      summary: Unlock a user (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlockUserDto'
+      responses:
+        '200':
+          description: User unlocked successfully
+        '403':
+          description: Forbidden - Admin access required or trying to unlock yourself
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/promote-to-admin:
+    post:
+      tags:
+        - Users
+      summary: Promote a user to admin role (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoteToAdminDto'
+      responses:
+        '200':
+          description: User promoted to admin successfully
+        '403':
+          description: Forbidden - Admin access required, trying to promote yourself, or user is already an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /wallets:
+    post:
+      tags:
+        - wallets
+      summary: Create a new wallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWalletDto'
+      responses:
+        '201':
+          description: The wallet has been successfully created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDto'
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Wallet with this address already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags:
+        - wallets
+      summary: Get all wallets for the current user
+      responses:
+        '200':
+          description: List of wallets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WalletDto'
+
+  /wallets/{id}:
+    get:
+      tags:
+        - wallets
+      summary: Get a wallet by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDto'
+        '404':
+          description: Wallet not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - wallets
+      summary: Update a wallet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWalletDto'
+      responses:
+        '200':
+          description: The wallet has been successfully updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDto'
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Wallet not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - wallets
+      summary: Delete a wallet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The wallet has been successfully deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Wallet deleted successfully
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Wallet not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /referrals/code:
+    get:
+      tags:
+        - Referrals
+      summary: Get user's referral code
+      responses:
+        '200':
+          description: Returns the user's referral code
+
+  /referrals/apply:
+    post:
+      tags:
+        - Referrals
+      summary: Apply a referral code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyReferralDto'
+      responses:
+        '200':
+          description: Referral code applied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Referral code applied successfully
+
+  /referrals/stats:
+    get:
+      tags:
+        - Referrals
+      summary: Get user's referral statistics
+      responses:
+        '200':
+          description: Returns user's referral statistics
+
+  /referrals/list:
+    get:
+      tags:
+        - Referrals
+      summary: List user's referrals
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Returns paginated list of user's referrals
+
+  /admin/config:
+    get:
+      tags:
+        - admin
+      summary: Get admin configuration
+      responses:
+        '200':
+          description: Returns the current admin configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminConfigResponseDto'
+
+    put:
+      tags:
+        - admin
+      summary: Update admin configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAdminConfigDto'
+      responses:
+        '200':
+          description: Returns the updated admin configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminConfigResponseDto'
+
+  /debug/queue/pause:
+    post:
+      tags:
+        - debug
+      summary: Pause queue (Debug endpoint)
+      security: []
+      parameters:
+        - name: queue
+          in: query
+          schema:
+            type: string
+            default: EMAIL
+      responses:
+        '200':
+          description: Queue paused successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Queue EMAIL paused
+
+  /debug/queue/resume:
+    post:
+      tags:
+        - debug
+      summary: Resume queue (Debug endpoint)
+      security: []
+      parameters:
+        - name: queue
+          in: query
+          schema:
+            type: string
+            default: EMAIL
+      responses:
+        '200':
+          description: Queue resumed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Queue EMAIL resumed
+
+  /debug/queue/status:
+    get:
+      tags:
+        - debug
+      summary: Get queue status (Debug endpoint)
+      security: []
+      parameters:
+        - name: queue
+          in: query
+          schema:
+            type: string
+            default: EMAIL
+      responses:
+        '200':
+          description: Queue status information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queue:
+                    type: string
+                  status:
+                    type: object
+
+  /debug/queues/health:
+    get:
+      tags:
+        - debug
+      summary: Get queues health (Debug endpoint)
+      security: []
+      responses:
+        '200':
+          description: Health status of all queues
+          content:
+            application/json:
+              schema:
+                type: object
