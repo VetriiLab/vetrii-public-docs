@@ -1,0 +1,99 @@
+# Route53 DNS Provider Configuration
+# This file contains Route53-specific DNS resources
+# To use this instead of Cloudflare, rename cloudflare.tf to cloudflare.tf.disabled and this file to route53.tf
+
+# Route 53 Hosted Zone
+resource "aws_route53_zone" "main" {
+  name = var.domain_name
+
+  tags = merge(var.tags, {
+    Name        = var.domain_name
+    Environment = "shared"
+  })
+}
+
+# ACM Certificate for CloudFront (must be in us-east-1)
+resource "aws_acm_certificate" "cloudfront_cert" {
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+  provider          = aws.us_east_1
+
+  subject_alternative_names = [
+    "*.${var.domain_name}",
+    local.staging_domain
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-cloudfront-cert"
+    Environment = "shared"
+  })
+}
+
+# Certificate validation records in Route53
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.cloudfront_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.main.zone_id
+}
+
+resource "aws_acm_certificate_validation" "cloudfront_cert" {
+  certificate_arn         = aws_acm_certificate.cloudfront_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+  provider                = aws.us_east_1
+
+  timeouts {
+    create = "5m"
+  }
+}
+
+# Route53 DNS records for CloudFront
+resource "aws_route53_record" "website" {
+  for_each = aws_cloudfront_distribution.website
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = local.domain_names[each.key]
+  type    = "A"
+
+  alias {
+    name                   = each.value.domain_name
+    zone_id                = each.value.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Optional: Add CNAME record for www (production only)
+resource "aws_route53_record" "www" {
+  count = var.domain_name == local.production_domain ? 1 : 0
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "www"
+  type    = "CNAME"
+  ttl     = 300
+  records = [var.domain_name]
+}
+
+# Route53-specific outputs
+output "route53_zone_id" {
+  description = "The Route53 hosted zone ID"
+  value       = aws_route53_zone.main.zone_id
+}
+
+output "route53_name_servers" {
+  description = "The Route53 hosted zone name servers"
+  value       = aws_route53_zone.main.name_servers
+} 

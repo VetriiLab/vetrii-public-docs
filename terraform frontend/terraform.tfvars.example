@@ -1,0 +1,29 @@
+# Copy this file to terraform.tfvars and update with your values
+
+# AWS Configuration
+aws_region  = "us-east-2"
+aws_profile = "vetrii"
+
+# Project Configuration
+project_name = "vetrii-frontend"
+
+# Domain Configuration
+domain_name    = "vetrii.com"
+staging_prefix = "staging"
+
+# Environment Configuration
+environments = ["staging", "production"]
+
+# Tags
+tags = {
+  Project     = "Vetrii Frontend"
+  ManagedBy   = "Terraform"
+  Owner       = "Vetrii"
+  Environment = "multi"
+}
+
+# DNS Configuration
+dns_provider         = "cloudflare"
+cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN"
+cloudflare_zone_name = "vetrii.com"
+github_repository    = "vetrii/vetrii-frontend"
